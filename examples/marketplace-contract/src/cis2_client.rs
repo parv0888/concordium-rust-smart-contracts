@@ -22,6 +22,7 @@ pub const TRANSFER_ENTRYPOINT_NAME: &str = "transfer";
 pub struct Cis2Client;
 
 impl Cis2Client {
+    /// Checks wether the input [cis2_contract_address]
     pub(crate) fn supports_cis2<S: HasStateApi, T: IsTokenId, A: IsTokenAmount + Copy>(
         host: &mut impl HasHost<State<S, T, A>, StateApiType = S>,
         cis_contract_address: &ContractAddress,

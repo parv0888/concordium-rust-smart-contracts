@@ -23,8 +23,10 @@ use state::{Commission, State, TokenInfo, TokenListItem, TokenRoyaltyState};
 
 use crate::{params::TransferParams, state::TokenOwnerInfo};
 
+/// Type of result any member of the contract can return.
 type ContractResult<A> = Result<A, MarketplaceError>;
 
+/// Maximum possible basis points (percentage * 100)
 const MAX_BASIS_POINTS: u16 = 10000;
 
 /// Type of token Id used by the CIS2 contract.
@@ -36,9 +38,9 @@ type ContractTokenAmount = TokenAmountU64;
 /// Type of state.
 type ContractState<S> = State<S, ContractTokenId, ContractTokenAmount>;
 
-/// Initializes a new Marketplace Contract
+/// Initializes a new Contract
 ///
-/// This function can be called by using InitParams.
+/// This function can be called by using `InitParams`.
 /// The commission should be less than the maximum allowed value of 10000 basis
 /// points
 #[init(contract = "Market-NFT", parameter = "InitParams")]
@@ -54,6 +56,7 @@ fn init<S: HasStateApi>(
     Ok(State::new(state_builder, params.commission))
 }
 
+/// Adds a token to the buyable list of tokens. Specifying a price in CCD.
 #[receive(contract = "Market-NFT", name = "add", parameter = "AddParams", mutable)]
 fn add<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
@@ -83,6 +86,7 @@ fn add<S: HasStateApi>(
     )?;
 
     ensure!(
+        // The total commission should not be greater than `MAX_BASIS_POINTS`
         host.state().commission.percentage_basis + params.royalty <= MAX_BASIS_POINTS,
         MarketplaceError::InvalidRoyalty
     );
@@ -99,9 +103,10 @@ fn add<S: HasStateApi>(
 
 /// Allows for transferring the token specified by TransferParams.
 ///
-/// This function is the typical buuy function of a Marketplace where one
-/// account can transfer an Asset by paying a price. The transfer will fail of
-/// the Amount paid is < token_quantity * token_price
+/// This function is the typical buy function of a Marketplace where one
+/// account can transfer an Asset by paying a price.
+/// The transfer will fail if the Amount paid in CCD is < token_quantity *
+/// token_price
 #[receive(
     contract = "Market-NFT",
     name = "transfer",
@@ -170,12 +175,6 @@ fn list<S: HasStateApi>(
         .collect::<Vec<TokenListItem<ContractTokenId, ContractTokenAmount>>>();
 
     Ok(TokenList(tokens))
-}
-
-struct DistributableAmounts {
-    to_primary_owner: Amount,
-    to_seller:        Amount,
-    to_marketplace:   Amount,
 }
 
 /// Calls the [supports](https://proposals.concordium.software/CIS/cis-0.html#supports) function of CIS2 contract.
@@ -254,6 +253,20 @@ fn distribute_amounts<S: HasStateApi, T: IsTokenId + Copy, A: IsTokenAmount + Co
     Ok(())
 }
 
+/// Final amounts in CCD to be distributed upon a purchase of token. See
+/// `calculate_amounts`.
+struct DistributableAmounts {
+    /// Amount which needs to be transferred to the Primary Owner of the Token
+    /// as Royalty. Usually the Minter of the token.
+    to_primary_owner: Amount,
+    /// Amount which needs to be transferred to the Seller (Who currently has
+    /// the authority of the token).
+    to_seller:        Amount,
+    /// Amount which needs to be transferred to the Marketplace Owner (Owner of
+    /// the Marketplace Contract) as Commission.
+    to_marketplace:   Amount,
+}
+
 /// Calculates the amounts (Commission, Royalty & Selling Price) to be
 /// distributed
 fn calculate_amounts(
@@ -278,6 +291,7 @@ fn calculate_amounts(
 
 #[concordium_cfg_test]
 mod test {
+    //! Testing module for Marketplace contract.
     use crate::{
         add, calculate_amounts,
         cis2_client::{
@@ -303,6 +317,7 @@ mod test {
         subindex: 0,
     };
 
+    /// Tests the user flow for adding a Token to the list of buyable tokens.
     #[concordium_test]
     fn should_add_token() {
         let token_id_1 = ContractTokenId::from(1);
@@ -414,6 +429,8 @@ mod test {
         },)
     }
 
+    /// Test the user flow for getting a list of buyable tokens by invoking
+    /// marketplace contract.
     #[concordium_test]
     fn should_list_token() {
         let token_quantity_1 = ContractTokenAmount::from(1);
@@ -480,6 +497,7 @@ mod test {
         })
     }
 
+    /// Tests the calculation of distributable amounts.
     #[concordium_test]
     fn calculate_commissions_test() {
         let commission_percentage_basis: u16 = 250;
